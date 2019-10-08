@@ -1,0 +1,6 @@
+[discord]
+token=insert your discord bot token here from https://discordapp.com/developers
+telnetuser=insert your telnet username here for your bot
+telnetpass=insert your telnet password here for your bot
+telnetport=insert your telnet port here for your bot
+

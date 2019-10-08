@@ -1,0 +1,7 @@
+{
+    "name": "brain/sporks-discord",
+    "description": "Sporks Discord Connector",
+    "require": {
+        "team-reflex/discord-php": "^4.0"
+    }
+}
