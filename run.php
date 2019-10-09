@@ -56,14 +56,18 @@ $discord->on('ready', function ($discord) {
 
 	$discord->on('message', function ($message) {
 		global $discord;
+		global $global_last_message;
+
+		// Grab from global, because discordphp strips it out!
+		$author = $global_last_message->d->author;
 
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
 
-		if ($message->author->username != $discord->username && $message->author->discriminator != $discord->discriminator) {
+		if ($author->username != $discord->username && $author->discriminator != $discord->discriminator) {
 
 			/* Learn from all public conversation the bot can see */
 
-			echo "<{$message->author->username}> {$message->content}", PHP_EOL;
+			echo "<{$author->username}> $content", PHP_EOL;
 
 			$mentioned = false;
 			foreach ($message->mentions as $mention) {
@@ -77,12 +81,13 @@ $discord->on('ready', function ($discord) {
 				}
 			}
 
-			$reply = sporks($message->author->username, $content);
+			$reply = sporks($author->username, $content);
 			$reply = trim(preg_replace('/\r|\n/', '', $reply));
 
 			/* Only respond if directly addressed */
-			if ($message->author->user->bot == false && $mentioned && $message->author->username != $discord->username) {
-				$reply = preg_replace('/^\001ACTION (.*)\001$/', '*\1*', $reply);
+			if ((!isset($author->bot) || $author->ibot == false) && $mentioned && $author->username != $discord->username) {
+				$reply = preg_replace('/^\001ACTION (.*)\s*\001$/', '*\1*', $reply);
+				$reply = preg_replace('/\s\*$/', '*', $reply);
 				if ($reply != '*NOTHING*') {
 					/* Respond with infobot.pm text from the telnet port */
 					echo "<" . $discord->username . "> " . $reply . PHP_EOL;
@@ -92,13 +97,13 @@ $discord->on('ready', function ($discord) {
 					/* These are here just in case the bot's telnet port is down, so that at least it can say something. */
 					switch ($r) {
 						case 0:
-							$message->channel->sendMessage("Sorry ".$message->author->username." I don't know what $content is.");
+							$message->channel->sendMessage("Sorry ".$author->username." I don't know what $content is.");
 						break;
 						case 1:
-							$message->channel->sendMessage("$content? No idea " . $message->author->username);
+							$message->channel->sendMessage("$content? No idea " . $author->username);
 						break;
 						case 2:
-							$message->channel->sendMessage("I'm not a genius, " . $message->author->username . "...");
+							$message->channel->sendMessage("I'm not a genius, " . $author->username . "...");
 						break;
 						case 3:
 							$message->channel->sendMessage("It's best to ask a real person about $content.");
@@ -107,7 +112,7 @@ $discord->on('ready', function ($discord) {
 							$message->channel->sendMessage("Not a clue.");
 						break;
 						case 5:
-							$message->channel->sendMessage("Don't you know, " . $message->author->username . "?");
+							$message->channel->sendMessage("Don't you know, " . $author->username . "?");
 						break;
 					}
 				}

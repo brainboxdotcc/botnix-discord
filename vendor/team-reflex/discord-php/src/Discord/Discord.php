@@ -629,6 +629,8 @@ class Discord
      */
     protected function handleDispatch($data)
     {
+	global $global_last_message;
+
         if (! is_null($hData = $this->handlers->getHandler($data->t))) {
             $handler = new $hData['class'](
                 $this->http,
@@ -663,7 +665,9 @@ class Discord
 
             $parse = [
                 Event::GUILD_CREATE,
-            ];
+	    ];
+
+	    $global_last_message = $data;
 
             if (! $this->emittedReady && (array_search($data->t, $parse) === false)) {
                 $this->unparsedPackets[] = function () use (&$handler, &$deferred, &$data) {
@@ -682,7 +686,7 @@ class Discord
             Event::VOICE_STATE_UPDATE  => 'handleVoiceStateUpdate',
         ];
 
-        if (isset($handlers[$data->t])) {
+	if (isset($handlers[$data->t])) {
             $this->{$handlers[$data->t]}($data);
         }
     }
@@ -793,7 +797,17 @@ class Discord
                         '$referrer'         => 'https://github.com/teamreflex/DiscordPHP',
                         '$referring_domain' => 'https://github.com/teamreflex/DiscordPHP',
                     ],
-                    'compress' => true,
+		    'compress' => true,
+		    'guild_subscriptions' => false,
+		    'presence' => [
+			'game' => [
+				'name' => 'with a million facts',
+				'type' => 0,
+			],
+			'status' => 'online',
+			'since' => time(),
+			'afk' => false,
+		    ],
                 ],
             ];
 
