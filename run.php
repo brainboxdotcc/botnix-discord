@@ -85,7 +85,7 @@ $discord->on('ready', function ($discord) {
 			$reply = trim(preg_replace('/\r|\n/', '', $reply));
 
 			/* Only respond if directly addressed */
-			if ((!isset($author->bot) || $author->ibot == false) && $mentioned && $author->username != $discord->username) {
+			if ((!isset($author->bot) || $author->bot == false) && $mentioned && $author->username != $discord->username) {
 				$reply = preg_replace('/^\001ACTION (.*)\s*\001$/', '*\1*', $reply);
 				$reply = preg_replace('/\s\*$/', '*', $reply);
 				if ($reply != '*NOTHING*') {
