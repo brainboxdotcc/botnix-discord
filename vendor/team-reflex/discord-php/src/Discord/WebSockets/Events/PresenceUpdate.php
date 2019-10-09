@@ -45,11 +45,11 @@ class PresenceUpdate extends Event
                 'nick'     => $rawOld['nick'],
             ], true);
 
-            $presenceAttributes = $presenceUpdate->getRawAttributes();
+	    $presenceAttributes = $presenceUpdate->getRawAttributes();
             $member->fill([
                 'status' => $presenceAttributes['status'],
                 'roles'  => $presenceAttributes['roles'],
-                'nick'   => $presenceAttributes['nick'],
+                'nick'   => $old->user->username,
                 'game'   => $presenceAttributes['game'],
             ]);
 

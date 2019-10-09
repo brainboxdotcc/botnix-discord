@@ -65,9 +65,6 @@ $discord->on('ready', function ($discord) {
 
 			echo "<{$message->author->username}> {$message->content}", PHP_EOL;
 
-			$reply = sporks($message->author->username, $content);
-			$reply = trim(preg_replace('/\r|\n/', '', $reply));
-	
 			$mentioned = false;
 			foreach ($message->mentions as $mention) {
 
@@ -79,6 +76,9 @@ $discord->on('ready', function ($discord) {
 					$mentioned = true;
 				}
 			}
+
+			$reply = sporks($message->author->username, $content);
+			$reply = trim(preg_replace('/\r|\n/', '', $reply));
 
 			/* Only respond if directly addressed */
 			if ($message->author->user->bot == false && $mentioned && $message->author->username != $discord->username) {
