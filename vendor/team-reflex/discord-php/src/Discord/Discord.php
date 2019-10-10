@@ -801,8 +801,8 @@ class Discord
 		    'guild_subscriptions' => false,
 		    'presence' => [
 			'game' => [
-				'name' => 'with a million facts',
-				'type' => 0,
+				'name' => 'for first message',
+				'type' => 3,
 			],
 			'status' => 'online',
 			'since' => time(),
@@ -983,17 +983,20 @@ class Discord
      */
     public function updatePresence(Game $game = null, $idle = false)
     {
-        $idle = ($idle) ? $idle : null;
+        $idle = ($idle) ? $idle : time();
 
         if (! is_null($game)) {
             $game = $game->getPublicAttributes();
-        }
+	}
 
+	// Fixed, Brain Oct 2019 - status, since, afk
         $payload = [
             'op' => Op::OP_PRESENCE_UPDATE,
             'd'  => [
                 'game'       => $game,
-                'idle_since' => $idle,
+		'status' => 'online',
+		'since' => time(),
+		'afk' => false,		
             ],
         ];
 

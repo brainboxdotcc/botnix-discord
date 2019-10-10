@@ -14,6 +14,8 @@ include __DIR__.'/vendor/autoload.php';
 
 use Discord\Parts\User\Game;
 
+$last_update_status = time() - 600;
+
 /* Live config should be in the directory above this one. It's like this to make sure you never accidentally commit it to a repository. */
 $config = parse_ini_file("../botnix-discord.ini");
 
@@ -21,10 +23,6 @@ $config = parse_ini_file("../botnix-discord.ini");
 function sporks($user, $content)
 {
 	global $config;
-	if ($content == "Sporks help") {
-		/* The only hard coded singular response... */
-		return "What? Are you struggling with me? For help with this bot, you should probably visit the brainbox.cc discord, here: https://discord.gg/brainbox";
-	}
 	/* NO, you can't configure any host other than localhost, as this connection is plaintext! */
 	$fp = fsockopen('localhost', $config['telnetport'], $errno, $errstr, 30);
 	if (!$fp) {
@@ -57,13 +55,83 @@ $discord->on('ready', function ($discord) {
 	$discord->on('message', function ($message) {
 		global $discord;
 		global $global_last_message;
+		global $last_update_status;
 
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
 
+		if (time() - $last_update_status > 120) {
+			$last_update_status = time();
+			$info = sporks("Self", $discord->username . " status");
+			preg_match('/^Since (.+?), there have been (\d+) modifications and (\d+) questions. I have been alive for (.+?), I currently know (\d+)/', $info, $matches);
+			$game = $discord->factory(Game::class, [
+				'name' => number_format($matches[5]) . " facts",
+				'url' => 'https://www.botnix.org/',
+				'type' => 3,
+			]);
+			$discord->updatePresence($game);
+		}
+
 		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
 		$content = trim(preg_replace('/\r|\n/', ' ', $content));
+
+		if ($content == $discord->username . " help") {
+			$trigger = "@".$discord->username;
+			$message->channel->sendMessage("", false, [
+				"title" => $discord->username . " help",
+				"color"=>0xffda00,
+				"url"=>"https://www.botnix.org",
+				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
+				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules"],
+				"fields"=>[
+					[
+						"name"=>"Teaching " . $discord->username,
+						"value"=>"
+							Any declaritive statement will teach the bot. For example someone saying ```twitch is down again``` will teach the bot this response, asking later ```$trigger twitch``` will make the bot respond
+							```I heard twitch is down again```
+						",
+						"inline"=>false,
+					],
+					[
+						"name"=>"Giving ".$discord->username." amnesia",
+						"value"=>"
+							You can make the bot forget a phrase with
+							```$trigger forget <keyword>```
+							If the bot already knows a fact, you will usually have to tell it to forget the fact, before it will accept a new one.
+						",
+						"inline"=>false,
+					],
+                                        [
+                                                "name"=>"Other commands",
+                                                "value"=>"
+							You can ask the bot where he learned a phrase by asking:
+							```$trigger, who told you about <keyword>?```
+							A status report can be obtained by asking the bot:
+							```$trigger status```
+							Note that the bot will only talk on channels, and not in private message, and will only respond when mentioned, although it will silently learn all it observes.
+                                                ",
+                                                "inline"=>false,
+                                        ],
+                                        [
+                                                "name"=>"Advanced usage",
+                                                "value"=>"
+							More advanced commands are available, such as if you want the bot to literally say some text, rather than reformatting it, you can for example type:
+							```$trigger, twitch is <reply> twitch is a streaming service.```
+							If you want the bot to tell you what is literally defined in the database for a fact you can type
+							```$trigger literal <keyword>```
+							Within any response, you can use the text ``<nick>`` or ``<who>`` to represent the nickname of the person who is talking to the bot (this will not be a mention when the bot replies!)
+							and you can separate multiple responses with a pipe symbol ``|`` and the bot will pick one at random when responding. for example:
+							```$trigger roll a dice is <reply>one|<reply>two|<reply>three|<reply>four|<reply>five|<reply>six```
+						",
+						"inline"=>false,
+					],
+
+				],
+				"description" => "",
+			]);
+			return;
+		}
 
 		if ($author->username != $discord->username && $author->discriminator != $discord->discriminator) {
 
@@ -97,11 +165,17 @@ $discord->on('ready', function ($discord) {
 						$message->channel->sendMessage("", false, [
 							"title" => $discord->username . " status",
 							"color"=>0xffda00,
-							"author"=>["name"=>"Hi, $author->username, i am running Botnix 2.0 with the infobot module.\r\n\r\nCaution! Moving parts inside!\r\n\r\n"],
+							"url"=>"https://www.botnix.org",
 							"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-							"description" => 
-								"Connected since\r\n" . '```' . $matches[1] . '```' . "Database changes\r\n" . '```' . number_format($matches[2]) . '```' . "Questions\r\n" . '```' . number_format($matches[3]) . '```' . "Uptime\r\n" . '```'
-								. $matches[4] . '```' . "Number of facts in database\r\n" . '```' . number_format($matches[5]) . '```',
+							"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules"],
+							"fields"=>[
+								["name"=>"Connected Since", "value"=>$matches[1], "inline"=>false],
+								["name"=>"Database changes", "value"=>number_format($matches[2]), "inline"=>false],
+								["name"=>"Questions", "value"=>number_format($matches[3]), "inline"=>false],
+								["name"=>"Uptime", "value"=>$matches[4], "inline"=>false],
+								["name"=>"Number of facts in database", "value"=>number_format($matches[5]), "inline"=>false],
+							],
+							"description" => "",
 						]);
 					} else {
 						$message->channel->sendMessage($reply);
