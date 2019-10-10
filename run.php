@@ -61,7 +61,9 @@ $discord->on('ready', function ($discord) {
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
 
+		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
+		$content = trim(preg_replace('/\r|\n/', ' ', $content));
 
 		if ($author->username != $discord->username && $author->discriminator != $discord->discriminator) {
 
@@ -91,7 +93,19 @@ $discord->on('ready', function ($discord) {
 				if ($reply != '*NOTHING*') {
 					/* Respond with infobot.pm text from the telnet port */
 					echo "<" . $discord->username . "> " . $reply . PHP_EOL;
-					$message->channel->sendMessage($reply);
+					if (preg_match('/^Since (.+?), there have been (\d+) modifications and (\d+) questions. I have been alive for (.+?), I currently know (\d+)/', $reply, $matches)) {
+						$message->channel->sendMessage("", false, [
+							"title" => $discord->username . " status",
+							"color"=>0xffda00,
+							"author"=>["name"=>"Hi, $author->username, i am running Botnix 2.0 with the infobot module.\r\n\r\nCaution! Moving parts inside!\r\n\r\n"],
+							"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
+							"description" => 
+								"Connected since\r\n" . '```' . $matches[1] . '```' . "Database changes\r\n" . '```' . number_format($matches[2]) . '```' . "Questions\r\n" . '```' . number_format($matches[3]) . '```' . "Uptime\r\n" . '```'
+								. $matches[4] . '```' . "Number of facts in database\r\n" . '```' . number_format($matches[5]) . '```',
+						]);
+					} else {
+						$message->channel->sendMessage($reply);
+					}
 				} else {
 					$r = rand(0, 5);
 					/* These are here just in case the bot's telnet port is down, so that at least it can say something. */
