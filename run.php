@@ -93,13 +93,16 @@ $discord->on('ready', function ($discord) {
 		}
 
 		$users = [];
+		$randomnick = "";
 		foreach ($message->channel->guild->members as $member) {
 			$users[] = $member;
 		}
 		$usercount = count($users);
-		$random = rand(0, $usercount - 1);
-		$randomuser = array_slice($users, $random, 1);
-		$randomnick = $randomuser[0]->user->username;
+		if ($usercount) {
+			$random = rand(0, $usercount - 1);
+			$randomuser = array_slice($users, $random, 1);
+			$randomnick = $randomuser[0]->user->username;
+		}
 
 		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
@@ -108,12 +111,13 @@ $discord->on('ready', function ($discord) {
 		if ($content == $discord->username . " help") {
 			$trigger = "@".$discord->username;
 			echo "Responding to help on channel\n";
-			$message->channel->sendMessage("", false, [
+			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
+			$message->author->user->sendMessage("", false, [
 				"title" => $discord->username . " help",
 				"color"=>0xffda00,
 				"url"=>"https://www.botnix.org",
 				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules"],
+				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
 				"fields"=>[
 					[
 						"name"=>"Teaching " . $discord->username,
@@ -154,12 +158,13 @@ Note that the bot will only talk on channels, and not in private message, and wi
 		if ($content == $discord->username . " help advanced") {
 			$trigger = "@".$discord->username;
 			echo "Responding to help (advanced) on channel\n";
-			$message->channel->sendMessage("", false, [
+			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
+			$message->author->user->sendMessage("", false, [
 				"title" => $discord->username . " advanced help",
 				"color"=>0xffda00,
 				"url"=>"https://www.botnix.org",
 				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules"],
+				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
 			"fields"=>[
                                         [
                                                 "name"=>"Literal responses",
@@ -173,11 +178,14 @@ If you want the bot to tell you what is literally defined in the database for a 
 					[
 						"name"=>"Variables",
 						"value"=>"You can use special keywords, which will be replaced:
-``<who>`` the nickname (not as a mention) of the user talking to the bot.
-``<me>`` the bot's current nickname.
-``<random>`` the nickname (not as a mention) of a *random* user on the current discord server.
-``<date>`` the date the bot learned the fact it is responding with
-``<now>`` the current date and time.",
+```<who>``` the nickname (not as a mention) of the user talking to the bot.
+```<me>``` the bot's current nickname.
+```<random>``` the nickname (not as a mention) of a *random* user on the current discord server.
+```<date>``` the date the bot learned the fact it is responding with
+```<now>``` the current date and time.
+```<list:(comma separated list)>``` Select one response from a comma separated list, e.g. ``<list:apple,orange,pear>`` will return one of apple, orange or pear. Other variables may be values in the list.
+```<sequence>``` Returns the number of messages spoken by the user
+",
 						"inline"=>false,
 					],
 					[
@@ -238,6 +246,13 @@ If you want the bot to tell you what is literally defined in the database for a 
 							"description" => "",
 						]);
 					} else {
+
+						// All but first url get <> around them to stop discord expanding them with previews
+						if (preg_match_all('#\bhttps?://[^,\s()<>]+(?:\([\w\d]+\)|([^,[:punct:]\s]|/))#', $reply, $matches)) {
+							for ($i = 1; $i < count($matches[0]); ++$i) {
+								$reply = str_replace($matches[0][$i], "<".$matches[0][$i].">", $reply);
+							}
+						}
 						$message->channel->sendMessage($reply);
 					}
 				} else {
