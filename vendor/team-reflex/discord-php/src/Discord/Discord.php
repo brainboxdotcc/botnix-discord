@@ -542,10 +542,10 @@ class Discord
             $data = zlib_decode($message->getPayload());
         } else {
             $data = $message->getPayload();
-        }
+	}
 
         $data = json_decode($data);
-        $this->emit('raw', [$data, $this]);
+	$this->emit('raw', [$data, $this]);
 
         if (isset($data->s)) {
             $this->seq = $data->s;
@@ -629,7 +629,8 @@ class Discord
      */
     protected function handleDispatch($data)
     {
-	global $global_last_message;
+        global $global_last_message;
+
 
         if (! is_null($hData = $this->handlers->getHandler($data->t))) {
             $handler = new $hData['class'](
@@ -667,6 +668,7 @@ class Discord
                 Event::GUILD_CREATE,
 	    ];
 
+	    //print_r($data);
 	    $global_last_message = $data;
 
             if (! $this->emittedReady && (array_search($data->t, $parse) === false)) {
@@ -798,7 +800,7 @@ class Discord
                         '$referring_domain' => 'https://github.com/teamreflex/DiscordPHP',
                     ],
 		    'compress' => true,
-		    'guild_subscriptions' => false,
+		    //'guild_subscriptions' => false,
 		    'presence' => [
 			'game' => [
 				'name' => 'for first message',

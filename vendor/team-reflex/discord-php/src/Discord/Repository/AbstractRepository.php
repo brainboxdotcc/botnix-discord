@@ -28,380 +28,383 @@ use React\Promise\Deferred;
  */
 abstract class AbstractRepository implements RepositoryInterface, ArrayAccess, Countable, IteratorAggregate
 {
-    /**
-     * The discriminator.
-     *
-     * @var string Discriminator.
-     */
-    protected $discrim = 'id';
+	/**
+	 * The discriminator.
+	 *
+	 * @var string Discriminator.
+	 */
+	protected $discrim = 'id';
 
-    /**
-     * The HTTP client.
-     *
-     * @var Http Client.
-     */
-    protected $http;
+	/**
+	 * The HTTP client.
+	 *
+	 * @var Http Client.
+	 */
+	protected $http;
 
-    /**
-     * The Cache wrapper.
-     *
-     * @var CacheWrapper Cache.
-     */
-    protected $cache;
+	/**
+	 * The Cache wrapper.
+	 *
+	 * @var CacheWrapper Cache.
+	 */
+	protected $cache;
 
-    /**
-     * The parts factory.
-     *
-     * @var Factory Parts factory.
-     */
-    protected $factory;
+	/**
+	 * The parts factory.
+	 *
+	 * @var Factory Parts factory.
+	 */
+	protected $factory;
 
-    /**
-     * The collection of items.
-     *
-     * @var Collection Items.
-     */
-    protected $collection;
+	/**
+	 * The collection of items.
+	 *
+	 * @var Collection Items.
+	 */
+	protected $collection;
 
-    /**
-     * Endpoints for interacting with the Discord servers.
-     *
-     * @var array Endpoints.
-     */
-    protected $endpoints = [];
+	/**
+	 * Endpoints for interacting with the Discord servers.
+	 *
+	 * @var array Endpoints.
+	 */
+	protected $endpoints = [];
 
-    /**
-     * The part that the repository serves.
-     *
-     * @var string The part that the repository serves.
-     */
-    protected $part;
+	/**
+	 * The part that the repository serves.
+	 *
+	 * @var string The part that the repository serves.
+	 */
+	protected $part;
 
-    /**
-     * Variables that are related to the repository.
-     *
-     * @var array Variables.
-     */
-    protected $vars = [];
+	/**
+	 * Variables that are related to the repository.
+	 *
+	 * @var array Variables.
+	 */
+	protected $vars = [];
 
-    /**
-     * AbstractRepository constructor.
-     *
-     * @param Http         $http    The HTTP client.
-     * @param CacheWrapper $cache   The cache wrapper.
-     * @param Factory      $factory The parts factory.
-     * @param array        $vars    An array of variables used for the endpoint.
-     */
-    public function __construct(Http $http, CacheWrapper $cache, Factory $factory, $vars = [])
-    {
-        $this->http       = $http;
-        $this->cache      = $cache;
-        $this->factory    = $factory;
-        $this->collection = new Collection([], $this->discrim);
-        $this->vars       = $vars;
-    }
+	/**
+	 * AbstractRepository constructor.
+	 *
+	 * @param Http		 $http	The HTTP client.
+	 * @param CacheWrapper $cache   The cache wrapper.
+	 * @param Factory	  $factory The parts factory.
+	 * @param array		$vars	An array of variables used for the endpoint.
+	 */
+	public function __construct(Http $http, CacheWrapper $cache, Factory $factory, $vars = [])
+	{
+		$this->http	   = $http;
+		$this->cache	  = $cache;
+		$this->factory	= $factory;
+		$this->collection = new Collection([], $this->discrim);
+		$this->vars	   = $vars;
+	}
 
-    /**
-     * Freshens the repository collection.
-     *
-     * @return \React\Promise\Promise
-     */
-    public function freshen()
-    {
-        if (! isset($this->endpoints['all'])) {
-            return \React\Promise\reject(new \Exception('You cannot freshen this repository.'));
-        }
+	/**
+	 * Freshens the repository collection.
+	 *
+	 * @return \React\Promise\Promise
+	 */
+	public function freshen()
+	{
+		if (! isset($this->endpoints['all'])) {
+			echo "can't freshen " . $this->endpoints['all'] . "\n";
+			return \React\Promise\reject(new \Exception('You cannot freshen this repository.'));
+		}
 
-        $deferred = new Deferred();
+		$deferred = new Deferred();
 
-        $this->http->get(
-            $this->replaceWithVariables(
-                $this->endpoints['all']
-            )
-        )->then(function ($response) {
-            $this->fill([]);
+		echo "Freshen " . $this->endpoints['all'] . "\n";
 
-            foreach ($response as $value) {
-                $value = array_merge($this->vars, (array) $value);
-                $part = $this->factory->create($this->part, $value, true);
+		$this->http->get(
+			$this->replaceWithVariables(
+				$this->endpoints['all']
+			)
+		)->then(function ($response) {
+			$this->fill([]);
 
-                $this->push($part);
-            }
-        }, function ($e) use ($deferred) {
-            $deferred->reject($e);
-        });
-    }
+			foreach ($response as $value) {
+				$value = array_merge($this->vars, (array) $value);
+				$part = $this->factory->create($this->part, $value, true);
 
-    /**
-     * {@inheritdoc}
-     */
-    public function create(array $attributes = [])
-    {
-        $attributes = array_merge($attributes, $this->vars);
+				$this->push($part);
+			}
+		}, function ($e) use ($deferred) {
+			$deferred->reject($e);
+		});
+	}
 
-        return $this->factory->create($this->part, $attributes);
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function create(array $attributes = [])
+	{
+		$attributes = array_merge($attributes, $this->vars);
 
-    /**
-     * {@inheritdoc}
-     */
-    public function save(Part &$part)
-    {
-        if ($part->created) {
-            $method     = 'patch';
-            $endpoint   = $part->replaceWithVariables($this->replaceWithVariables(@$this->endpoints['update']));
-            $attributes = $part->getUpdatableAttributes();
+		return $this->factory->create($this->part, $attributes);
+	}
 
-            if (! isset($this->endpoints['update'])) {
-                return \React\Promise\reject(new \Exception('You cannot update this part.'));
-            }
-        } else {
-            $method     = 'post';
-            $endpoint   = $part->replaceWithVariables($this->replaceWithVariables(@$this->endpoints['create']));
-            $attributes = $part->getCreatableAttributes();
+	/**
+	 * {@inheritdoc}
+	 */
+	public function save(Part &$part)
+	{
+		if ($part->created) {
+			$method	 = 'patch';
+			$endpoint   = $part->replaceWithVariables($this->replaceWithVariables(@$this->endpoints['update']));
+			$attributes = $part->getUpdatableAttributes();
 
-            if (! isset($this->endpoints['create'])) {
-                return \React\Promise\reject(new \Exception('You cannot create this part.'));
-            }
-        }
+			if (! isset($this->endpoints['update'])) {
+				return \React\Promise\reject(new \Exception('You cannot update this part.'));
+			}
+		} else {
+			$method	 = 'post';
+			$endpoint   = $part->replaceWithVariables($this->replaceWithVariables(@$this->endpoints['create']));
+			$attributes = $part->getCreatableAttributes();
 
-        $deferred = new Deferred();
+			if (! isset($this->endpoints['create'])) {
+				return \React\Promise\reject(new \Exception('You cannot create this part.'));
+			}
+		}
 
-        $this->http->{$method}(
-            $endpoint,
-            $attributes
-        )->then(function ($response) use ($deferred, &$part, $method) {
-            $part->fill((array) $response);
+		$deferred = new Deferred();
 
-            $part->created = true;
-            $part->deleted = false;
+		$this->http->{$method}(
+			$endpoint,
+			$attributes
+		)->then(function ($response) use ($deferred, &$part, $method) {
+			$part->fill((array) $response);
 
-            $deferred->resolve($part);
-        }, function ($e) use ($deferred) {
-            $deferred->reject($e);
-        });
+			$part->created = true;
+			$part->deleted = false;
 
-        return $deferred->promise();
-    }
+			$deferred->resolve($part);
+		}, function ($e) use ($deferred) {
+			$deferred->reject($e);
+		});
 
-    /**
-     * {@inheritdoc}
-     */
-    public function delete(Part &$part)
-    {
-        if (! $part->created) {
-            return \React\Promise\reject(new \Exception('You cannot delete a non-existant part.'));
-        }
+		return $deferred->promise();
+	}
 
-        if (! isset($this->endpoints['delete'])) {
-            return \React\Promise\reject(new \Exception('You cannot delete this part.'));
-        }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function delete(Part &$part)
+	{
+		if (! $part->created) {
+			return \React\Promise\reject(new \Exception('You cannot delete a non-existant part.'));
+		}
 
-        $deferred = new Deferred();
+		if (! isset($this->endpoints['delete'])) {
+			return \React\Promise\reject(new \Exception('You cannot delete this part.'));
+		}
 
-        $this->http->delete(
-            $part->replaceWithVariables(
-                $this->replaceWithVariables(
-                    $this->endpoints['delete']
-                )
-            )
-        )->then(function ($response) use ($deferred, &$part) {
-            $part->created = false;
+		$deferred = new Deferred();
 
-            $deferred->resolve($part);
-        }, function ($e) use ($deferred) {
-            $deferred->reject($e);
-        });
+		$this->http->delete(
+			$part->replaceWithVariables(
+				$this->replaceWithVariables(
+					$this->endpoints['delete']
+				)
+			)
+		)->then(function ($response) use ($deferred, &$part) {
+			$part->created = false;
 
-        return $deferred->promise();
-    }
+			$deferred->resolve($part);
+		}, function ($e) use ($deferred) {
+			$deferred->reject($e);
+		});
 
-    /**
-     * {@inheritdoc}
-     */
-    public function fresh(Part &$part)
-    {
-        if (! $part->created) {
-            return \React\Promise\reject(new \Exception('You cannot get a non-existant part.'));
-        }
+		return $deferred->promise();
+	}
 
-        if (! isset($this->endpoints['get'])) {
-            return \React\Promise\reject(new \Exception('You cannot get this part.'));
-        }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function fresh(Part &$part)
+	{
+		if (! $part->created) {
+			return \React\Promise\reject(new \Exception('You cannot get a non-existant part.'));
+		}
 
-        $deferred = new Deferred();
+		if (! isset($this->endpoints['get'])) {
+			return \React\Promise\reject(new \Exception('You cannot get this part.'));
+		}
 
-        $this->http->get(
-            $part->replaceWithVariables(
-                $this->replaceWithVariables(
-                    $this->endpoints['get']
-                )
-            )
-        )->then(function ($response) use ($deferred, &$part) {
-            $part->fill($response);
+		$deferred = new Deferred();
 
-            $deferred->resolve($part);
-        }, function ($e) use ($deferred) {
-            $deferred->reject($e);
-        });
+		$this->http->get(
+			$part->replaceWithVariables(
+				$this->replaceWithVariables(
+					$this->endpoints['get']
+				)
+			)
+		)->then(function ($response) use ($deferred, &$part) {
+			$part->fill($response);
 
-        return $deferred->promise();
-    }
+			$deferred->resolve($part);
+		}, function ($e) use ($deferred) {
+			$deferred->reject($e);
+		});
 
-    /**
-     * {@inheritdoc}
-     */
-    public function fetch($id)
-    {
-        if ($part = $this->get('id', $id)) {
-            return \React\Promise\resolve($part);
-        }
+		return $deferred->promise();
+	}
 
-        if (! isset($this->endpoints['get'])) {
-            return \React\Promise\reject(new \Exception('You cannot get this part.'));
-        }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function fetch($id)
+	{
+		if ($part = $this->get('id', $id)) {
+			return \React\Promise\resolve($part);
+		}
 
-        $deferred = new Deferred();
+		if (! isset($this->endpoints['get'])) {
+			return \React\Promise\reject(new \Exception('You cannot get this part.'));
+		}
 
-        $this->http->get(
-            $this->replaceWithVariables(
-                str_replace(':id', $id, $this->endpoints['get'])
-            )
-        )->then(function ($response) use ($deferred) {
-            $part = $this->factory->create($this->part, $response, true);
+		$deferred = new Deferred();
 
-            $deferred->resolve($part);
-        }, function ($e) use ($deferred) {
-            $deferred->reject($e);
-        });
+		$this->http->get(
+			$this->replaceWithVariables(
+				str_replace(':id', $id, $this->endpoints['get'])
+			)
+		)->then(function ($response) use ($deferred) {
+			$part = $this->factory->create($this->part, $response, true);
 
-        return $deferred->promise();
-    }
+			$deferred->resolve($part);
+		}, function ($e) use ($deferred) {
+			$deferred->reject($e);
+		});
 
-    /**
-     * Replaces variables in string with syntax :{varname}.
-     *
-     * @param string $string A string with placeholders.
-     *
-     * @return string A string with placeholders replaced.
-     */
-    protected function replaceWithVariables($string)
-    {
-        if (preg_match_all('/:([a-z_]+)/', $string, $matches)) {
-            list(
-                $original,
-                $vars
-            ) = $matches;
+		return $deferred->promise();
+	}
 
-            foreach ($vars as $key => $var) {
-                if (isset($this->vars[$var])) {
-                    $string = str_replace($original[$key], $this->vars[$var], $string);
-                }
-            }
-        }
+	/**
+	 * Replaces variables in string with syntax :{varname}.
+	 *
+	 * @param string $string A string with placeholders.
+	 *
+	 * @return string A string with placeholders replaced.
+	 */
+	protected function replaceWithVariables($string)
+	{
+		if (preg_match_all('/:([a-z_]+)/', $string, $matches)) {
+			list(
+				$original,
+				$vars
+			) = $matches;
 
-        return $string;
-    }
+			foreach ($vars as $key => $var) {
+				if (isset($this->vars[$var])) {
+					$string = str_replace($original[$key], $this->vars[$var], $string);
+				}
+			}
+		}
 
-    /**
-     * Returns how many items are in the repository.
-     *
-     * @return int Count.
-     */
-    public function count()
-    {
-        return $this->collection->count();
-    }
+		return $string;
+	}
 
-    /**
-     * Get an iterator for the items.
-     *
-     * @return \ArrayIterator
-     */
-    public function getIterator()
-    {
-        return $this->collection->getIterator();
-    }
+	/**
+	 * Returns how many items are in the repository.
+	 *
+	 * @return int Count.
+	 */
+	public function count()
+	{
+		return $this->collection->count();
+	}
 
-    /**
-     * Determine if an item exists at an offset.
-     *
-     * @param mixed $key
-     *
-     * @return bool
-     */
-    public function offsetExists($key)
-    {
-        return $this->collection->offsetExists($key);
-    }
+	/**
+	 * Get an iterator for the items.
+	 *
+	 * @return \ArrayIterator
+	 */
+	public function getIterator()
+	{
+		return $this->collection->getIterator();
+	}
 
-    /**
-     * Get an item at a given offset.
-     *
-     * @param mixed $key
-     *
-     * @return mixed
-     */
-    public function offsetGet($key)
-    {
-        return $this->collection->offsetGet($key);
-    }
+	/**
+	 * Determine if an item exists at an offset.
+	 *
+	 * @param mixed $key
+	 *
+	 * @return bool
+	 */
+	public function offsetExists($key)
+	{
+		return $this->collection->offsetExists($key);
+	}
 
-    /**
-     * Set the item at a given offset.
-     *
-     * @param mixed $key
-     * @param mixed $value
-     *
-     * @return void
-     */
-    public function offsetSet($key, $value)
-    {
-        $this->collection->offsetSet($key, $value);
-    }
+	/**
+	 * Get an item at a given offset.
+	 *
+	 * @param mixed $key
+	 *
+	 * @return mixed
+	 */
+	public function offsetGet($key)
+	{
+		return $this->collection->offsetGet($key);
+	}
 
-    /**
-     * Unset the item at a given offset.
-     *
-     * @param string $key
-     *
-     * @return void
-     */
-    public function offsetUnset($key)
-    {
-        $this->collection->offsetUnset($key);
-    }
+	/**
+	 * Set the item at a given offset.
+	 *
+	 * @param mixed $key
+	 * @param mixed $value
+	 *
+	 * @return void
+	 */
+	public function offsetSet($key, $value)
+	{
+		$this->collection->offsetSet($key, $value);
+	}
 
-    /**
-     * Convert the object into something JSON serializable.
-     *
-     * @return array
-     */
-    public function jsonSerialize()
-    {
-        return $this->collection->jsonSerialize();
-    }
+	/**
+	 * Unset the item at a given offset.
+	 *
+	 * @param string $key
+	 *
+	 * @return void
+	 */
+	public function offsetUnset($key)
+	{
+		$this->collection->offsetUnset($key);
+	}
 
-    /**
-     * Handles debug calls from var_dump and similar functions.
-     *
-     * @return array An array of attributes.
-     */
-    public function __debugInfo()
-    {
-        return $this->all();
-    }
+	/**
+	 * Convert the object into something JSON serializable.
+	 *
+	 * @return array
+	 */
+	public function jsonSerialize()
+	{
+		return $this->collection->jsonSerialize();
+	}
 
-    /**
-     * Handles dynamic calls to the repository.
-     *
-     * @param string $function The function called.
-     * @param array  $params   Array of parameters.
-     *
-     * @return mixed
-     */
-    public function __call($function, array $params)
-    {
-        return call_user_func_array([$this->collection, $function], $params);
-    }
+	/**
+	 * Handles debug calls from var_dump and similar functions.
+	 *
+	 * @return array An array of attributes.
+	 */
+	public function __debugInfo()
+	{
+		return $this->all();
+	}
+
+	/**
+	 * Handles dynamic calls to the repository.
+	 *
+	 * @param string $function The function called.
+	 * @param array  $params   Array of parameters.
+	 *
+	 * @return mixed
+	 */
+	public function __call($function, array $params)
+	{
+		return call_user_func_array([$this->collection, $function], $params);
+	}
 }

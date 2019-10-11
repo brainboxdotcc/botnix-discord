@@ -15,16 +15,18 @@ include __DIR__.'/vendor/autoload.php';
 use Discord\Parts\User\Game;
 
 $last_update_status = time() - 600;
+$ircnick = "";
 
 /* Live config should be in the directory above this one. It's like this to make sure you never accidentally commit it to a repository. */
 $config = parse_ini_file("../botnix-discord.ini");
 
 /* Connect to the bot via its telnet port over localhost for remote control */
-function sporks($user, $content)
+function sporks($user, $content, $randomnick = "")
 {
 	global $config;
+	global $ircnick;
 	/* NO, you can't configure any host other than localhost, as this connection is plaintext! */
-	$fp = fsockopen('localhost', $config['telnetport'], $errno, $errstr, 30);
+	$fp = fsockopen('localhost', $config['telnetport'], $errno, $errstr, 1);
 	if (!$fp) {
 		print $errno . ": " . $errstr . "\n";
 		return "*NOTHING*";
@@ -37,8 +39,19 @@ function sporks($user, $content)
 		$passprompt = fgets($fp);
 		fwrite($fp, $config['telnetpass']."\n");
 		$welcomeprompt = fgets($fp);
+		if ($randomnick != "") {
+			fwrite($fp, ".RN $randomnick\n");
+			$response = fgets($fp);
+		}
 		fwrite($fp, ".DR $user $content\n");
 		$response = fgets($fp);
+		$netdata = fgets($fp);
+		if (preg_match("/nick => '(.+?)'/", $netdata, $match)) {
+			if ($match[1] != "") {
+				$ircnick = $match[1];
+				print "IRC NICK: $ircnick\n";
+			}
+		}
 		fclose($fp);
 		return $response;
 	}
@@ -56,13 +69,20 @@ $discord->on('ready', function ($discord) {
 		global $discord;
 		global $global_last_message;
 		global $last_update_status;
+		global $ircnick;
 
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
 
+		if ($ircnick == "") {
+			$ircnick = $discord->username;
+		}
+
 		if (time() - $last_update_status > 120) {
 			$last_update_status = time();
-			$info = sporks("Self", $discord->username . " status");
+			echo "Running presence update\n";
+			$info = sporks("Self", $ircnick . " status");
+			echo "Presence update with: '$info'\n";
 			preg_match('/^Since (.+?), there have been (\d+) modifications and (\d+) questions. I have been alive for (.+?), I currently know (\d+)/', $info, $matches);
 			$game = $discord->factory(Game::class, [
 				'name' => number_format($matches[5]) . " facts",
@@ -72,12 +92,22 @@ $discord->on('ready', function ($discord) {
 			$discord->updatePresence($game);
 		}
 
+		$users = [];
+		foreach ($message->channel->guild->members as $member) {
+			$users[] = $member;
+		}
+		$usercount = count($users);
+		$random = rand(0, $usercount - 1);
+		$randomuser = array_slice($users, $random, 1);
+		$randomnick = $randomuser[0]->user->username;
+
 		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
 		$content = trim(preg_replace('/\r|\n/', ' ', $content));
 
 		if ($content == $discord->username . " help") {
 			$trigger = "@".$discord->username;
+			echo "Responding to help on channel\n";
 			$message->channel->sendMessage("", false, [
 				"title" => $discord->username . " help",
 				"color"=>0xffda00,
@@ -104,26 +134,56 @@ $discord->on('ready', function ($discord) {
 					],
                                         [
                                                 "name"=>"Other commands",
-                                                "value"=>"
-							You can ask the bot where he learned a phrase by asking:
-							```$trigger, who told you about <keyword>?```
-							A status report can be obtained by asking the bot:
-							```$trigger status```
-							Note that the bot will only talk on channels, and not in private message, and will only respond when mentioned, although it will silently learn all it observes.
-                                                ",
+                                                "value"=>"You can ask the bot where he learned a phrase by asking:
+```$trigger, who told you about <keyword>?```
+A status report can be obtained by asking the bot:
+```$trigger status```
+Note that the bot will only talk on channels, and not in private message, and will only respond when mentioned, although it will silently learn all it observes.",
                                                 "inline"=>false,
                                         ],
+					[
+						"name"=>"Advanced commands",
+						"value"=>"Further advanced commands are available, for info on them type ```$trigger help advanced```",
+						"inline"=>false,
+					],
+				],
+				"description" => "",
+			]);
+			return;
+		}
+		if ($content == $discord->username . " help advanced") {
+			$trigger = "@".$discord->username;
+			echo "Responding to help (advanced) on channel\n";
+			$message->channel->sendMessage("", false, [
+				"title" => $discord->username . " advanced help",
+				"color"=>0xffda00,
+				"url"=>"https://www.botnix.org",
+				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
+				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules"],
+			"fields"=>[
                                         [
-                                                "name"=>"Advanced usage",
+                                                "name"=>"Literal responses",
                                                 "value"=>"
-							More advanced commands are available, such as if you want the bot to literally say some text, rather than reformatting it, you can for example type:
-							```$trigger, twitch is <reply> twitch is a streaming service.```
-							If you want the bot to tell you what is literally defined in the database for a fact you can type
-							```$trigger literal <keyword>```
-							Within any response, you can use the text ``<nick>`` or ``<who>`` to represent the nickname of the person who is talking to the bot (this will not be a mention when the bot replies!)
-							and you can separate multiple responses with a pipe symbol ``|`` and the bot will pick one at random when responding. for example:
-							```$trigger roll a dice is <reply>one|<reply>two|<reply>three|<reply>four|<reply>five|<reply>six```
-						",
+More advanced commands are available, such as if you want the bot to literally say some text, rather than reformatting it, you can for example type:
+```$trigger, twitch is <reply> twitch is a streaming service.```
+If you want the bot to tell you what is literally defined in the database for a fact you can type
+```$trigger literal <keyword>```",
+                                                "inline"=>false,
+                                        ],			
+					[
+						"name"=>"Variables",
+						"value"=>"You can use special keywords, which will be replaced:
+``<who>`` the nickname (not as a mention) of the user talking to the bot.
+``<me>`` the bot's current nickname.
+``<random>`` the nickname (not as a mention) of a *random* user on the current discord server.
+``<date>`` the date the bot learned the fact it is responding with
+``<now>`` the current date and time.",
+						"inline"=>false,
+					],
+					[
+						"name"=>"Randomised Responses",
+						"value"=>"You can separate multiple responses with a pipe symbol ``|`` and the bot will pick one at random when responding. for example:
+```$trigger roll a dice is <reply>one|<reply>two|<reply>three|<reply>four|<reply>five|<reply>six```",
 						"inline"=>false,
 					],
 
@@ -151,7 +211,7 @@ $discord->on('ready', function ($discord) {
 				}
 			}
 
-			$reply = sporks($author->username, $content);
+			$reply = sporks($author->username, $content, $randomnick);
 			$reply = trim(preg_replace('/\r|\n/', '', $reply));
 
 			/* Only respond if directly addressed */
