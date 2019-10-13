@@ -549,7 +549,9 @@ class Discord
 
         if (isset($data->s)) {
             $this->seq = $data->s;
-        }
+	}
+
+	//print_r($data);
 
         $op = [
             Op::OP_DISPATCH        => 'handleDispatch',
@@ -668,7 +670,6 @@ class Discord
                 Event::GUILD_CREATE,
 	    ];
 
-	    //print_r($data);
 	    $global_last_message = $data;
 
             if (! $this->emittedReady && (array_search($data->t, $parse) === false)) {
@@ -800,7 +801,7 @@ class Discord
                         '$referring_domain' => 'https://github.com/teamreflex/DiscordPHP',
                     ],
 		    'compress' => true,
-		    //'guild_subscriptions' => false,
+		    'guild_subscriptions' => false,
 		    'presence' => [
 			'game' => [
 				'name' => 'for first message',

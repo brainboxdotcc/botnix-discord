@@ -13,6 +13,7 @@
 include __DIR__.'/vendor/autoload.php';
 
 use Discord\Parts\User\Game;
+use Discord\Parts\User\User;
 
 $last_update_status = time() - 600;
 $ircnick = "";
@@ -112,7 +113,8 @@ $discord->on('ready', function ($discord) {
 			$trigger = "@".$discord->username;
 			echo "Responding to help on channel\n";
 			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
-			$message->author->user->sendMessage("", false, [
+			//$message->channel->sendMessage("", false, [
+			$message->author->sendMessage("", false, [
 				"title" => $discord->username . " help",
 				"color"=>0xffda00,
 				"url"=>"https://www.botnix.org",
@@ -159,7 +161,8 @@ Note that the bot will only talk on channels, and not in private message, and wi
 			$trigger = "@".$discord->username;
 			echo "Responding to help (advanced) on channel\n";
 			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
-			$message->author->user->sendMessage("", false, [
+			//$message->channel->sendMessage("", false, [
+			$message->author->sendMessage("", false, [
 				"title" => $discord->username . " advanced help",
 				"color"=>0xffda00,
 				"url"=>"https://www.botnix.org",
