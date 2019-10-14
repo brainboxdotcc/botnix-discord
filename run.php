@@ -7,6 +7,10 @@
  *
  * Note that this does not fork as a demon and should be run via 'screen'.
  *
+ * This bot uses an extensively modded version of team-reflex/discordphp - DO NOT
+ * run "composer update" on it, or you'll lose compatibility changes with modern
+ * discord API!
+ *
  * - Brain#0001 Oct 2019.
  */
 
@@ -15,7 +19,13 @@ include __DIR__.'/vendor/autoload.php';
 use Discord\Parts\User\Game;
 use Discord\Parts\User\User;
 
+/* Updates immediately, doesnt matter if it spams botnix, it can take it ;-) */
 $last_update_status = time() - 600;
+
+/* First update an hour from now, prevents spamming the API if the bot is in a short crashloop */
+$last_topgg_update = time() + 3600;
+
+/* Current IRC nickname reported from botnix core, used to address bot via telnet session */
 $ircnick = "";
 
 /* Live config should be in the directory above this one. It's like this to make sure you never accidentally commit it to a repository. */
@@ -50,7 +60,6 @@ function sporks($user, $content, $randomnick = "")
 		if (preg_match("/nick => '(.+?)'/", $netdata, $match)) {
 			if ($match[1] != "") {
 				$ircnick = $match[1];
-				print "IRC NICK: $ircnick\n";
 			}
 		}
 		fclose($fp);
@@ -63,14 +72,19 @@ $discord = new \Discord\Discord([
 	'token' => $config['token'],
 ]);
 
+/* Discord API connection ready to serve! */
 $discord->on('ready', function ($discord) {
 	echo "Bot '$discord->username#$discord->discriminator' ($discord->id) is ready.", PHP_EOL;
+	$countdetails = count_guilds($discord);
+	echo "Present on " . $countdetails['guild_count'] . " servers with a total of " . $countdetails['member_count'] . " members\n";
 
 	$discord->on('message', function ($message) {
 		global $discord;
 		global $global_last_message;
 		global $last_update_status;
+		global $last_topgg_update;
 		global $ircnick;
+		global $config;
 
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
@@ -79,23 +93,42 @@ $discord->on('ready', function ($discord) {
 			$ircnick = $discord->username;
 		}
 
+		/* Update for top.gg API, if defined in config */
+		if (isset($config["topggapikey"]) && (time() - $last_topgg_update > 3600)) {
+			$last_topgg_update = time();
+			$countdetails = count_guilds($discord);
+			echo "Running top.gg API update\n";
+			file_get_contents('https://top.gg/api/bots/' . $discord->id . '/stats', false, stream_context_create([
+				'http' => [
+					'method' => 'POST',
+					'header'  => "Content-type: application/json\r\nAuthorization: " . $config["topggapikey"],
+					'content' => json_encode(['server_count' => $countdetails['guild_count']])
+				]
+			]));
+			print "top.gg update done, next update in 60 minutes\n";
+		}
+
+		/* Update online presence */
 		if (time() - $last_update_status > 120) {
 			$last_update_status = time();
 			echo "Running presence update\n";
 			$info = sporks("Self", $ircnick . " status");
-			echo "Presence update with: '$info'\n";
+			$countdetails = count_guilds($discord);
 			preg_match('/^Since (.+?), there have been (\d+) modifications and (\d+) questions. I have been alive for (.+?), I currently know (\d+)/', $info, $matches);
 			$game = $discord->factory(Game::class, [
-				'name' => number_format($matches[5]) . " facts",
+				'name' => number_format($matches[5]) . " facts on " . number_format($countdetails['guild_count']) . " servers, " . number_format($countdetails['member_count']) . " total users",
 				'url' => 'https://www.botnix.org/',
 				'type' => 3,
 			]);
 			$discord->updatePresence($game);
+			print "Presence update done\n";
 		}
 
 		$users = [];
 		$randomnick = "";
-		foreach ($message->channel->guild->members as $member) {
+		/*
+		XXX FIXME XXX Doesnt work with guild_subscriptions off
+ 		foreach ($message->channel->guild->members as $member) {
 			$users[] = $member;
 		}
 		$usercount = count($users);
@@ -103,7 +136,7 @@ $discord->on('ready', function ($discord) {
 			$random = rand(0, $usercount - 1);
 			$randomuser = array_slice($users, $random, 1);
 			$randomnick = $randomuser[0]->user->username;
-		}
+		}*/
 
 		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
@@ -138,15 +171,15 @@ $discord->on('ready', function ($discord) {
 						",
 						"inline"=>false,
 					],
-                                        [
-                                                "name"=>"Other commands",
-                                                "value"=>"You can ask the bot where he learned a phrase by asking:
+					[
+							"name"=>"Other commands",
+							"value"=>"You can ask the bot where he learned a phrase by asking:
 ```$trigger, who told you about <keyword>?```
 A status report can be obtained by asking the bot:
 ```$trigger status```
 Note that the bot will only talk on channels, and not in private message, and will only respond when mentioned, although it will silently learn all it observes.",
-                                                "inline"=>false,
-                                        ],
+							"inline"=>false,
+					],
 					[
 						"name"=>"Advanced commands",
 						"value"=>"Further advanced commands are available, for info on them type ```$trigger help advanced```",
@@ -169,15 +202,15 @@ Note that the bot will only talk on channels, and not in private message, and wi
 				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
 				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
 			"fields"=>[
-                                        [
-                                                "name"=>"Literal responses",
-                                                "value"=>"
+					[
+							"name"=>"Literal responses",
+							"value"=>"
 More advanced commands are available, such as if you want the bot to literally say some text, rather than reformatting it, you can for example type:
 ```$trigger, twitch is <reply> twitch is a streaming service.```
 If you want the bot to tell you what is literally defined in the database for a fact you can type
 ```$trigger literal <keyword>```",
-                                                "inline"=>false,
-                                        ],			
+							"inline"=>false,
+					],			
 					[
 						"name"=>"Variables",
 						"value"=>"You can use special keywords, which will be replaced:
@@ -233,18 +266,21 @@ If you want the bot to tell you what is literally defined in the database for a 
 					/* Respond with infobot.pm text from the telnet port */
 					echo "<" . $discord->username . "> " . $reply . PHP_EOL;
 					if (preg_match('/^Since (.+?), there have been (\d+) modifications and (\d+) questions. I have been alive for (.+?), I currently know (\d+)/', $reply, $matches)) {
+						$countdetails = count_guilds($discord);
 						$message->channel->sendMessage("", false, [
 							"title" => $discord->username . " status",
 							"color"=>0xffda00,
 							"url"=>"https://www.botnix.org",
 							"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-							"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules"],
+							"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
 							"fields"=>[
 								["name"=>"Connected Since", "value"=>$matches[1], "inline"=>false],
 								["name"=>"Database changes", "value"=>number_format($matches[2]), "inline"=>false],
 								["name"=>"Questions", "value"=>number_format($matches[3]), "inline"=>false],
 								["name"=>"Uptime", "value"=>$matches[4], "inline"=>false],
 								["name"=>"Number of facts in database", "value"=>number_format($matches[5]), "inline"=>false],
+								["name"=>"Total Servers", "value"=>number_format($countdetails['guild_count']), "inline"=>false],
+								["name"=>"Total Users", "value"=>number_format($countdetails['member_count']), "inline"=>false],
 							],
 							"description" => "",
 						]);
@@ -289,3 +325,12 @@ If you want the bot to tell you what is literally defined in the database for a 
 });
 
 $discord->run();
+
+/* Count total guilds and members, luckily we still get this when guild_subscriptions = false! */
+function count_guilds($discord) {
+	$rv = ["guild_count"=>$discord->guilds->count(), "member_count"=>1];
+	foreach ($discord->guilds as $guild) {
+		$rv["member_count"] += $guild->member_count;
+	}
+	return $rv;
+}
