@@ -54,6 +54,7 @@ function sporks($user, $content, $randomnick = "")
 			fwrite($fp, ".RN $randomnick\n");
 			$response = fgets($fp);
 		}
+		$user = preg_replace("/\s+/", "_", $user);
 		fwrite($fp, ".DR $user $content\n");
 		$response = fgets($fp);
 		$netdata = fgets($fp);
@@ -63,7 +64,7 @@ function sporks($user, $content, $randomnick = "")
 			}
 		}
 		fclose($fp);
-		return $response;
+		return str_replace("_", " ", $response);
 	}
 }
 
@@ -94,19 +95,45 @@ $discord->on('ready', function ($discord) {
 		}
 
 		/* Update for top.gg API, if defined in config */
-		if (isset($config["topggapikey"]) && (time() - $last_topgg_update > 3600)) {
+		if (time() - $last_topgg_update > 3600) {
 			$last_topgg_update = time();
 			$countdetails = count_guilds($discord);
-			echo "Running top.gg API update\n";
-			file_get_contents('https://top.gg/api/bots/' . $discord->id . '/stats', false, stream_context_create([
-				'http' => [
-					'method' => 'POST',
-					'header'  => "Content-type: application/json\r\nAuthorization: " . $config["topggapikey"],
-					'content' => json_encode(['server_count' => $countdetails['guild_count']])
-				]
-			]));
-			print "top.gg update done, next update in 60 minutes\n";
+
+			if (isset($config['topggapikey'])) {
+				echo "Running top.gg API update\n";
+				file_get_contents('https://top.gg/api/bots/' . $discord->id . '/stats', false, stream_context_create([
+					'http' => [
+						'method' => 'POST',
+						'header'  => "Content-type: application/json\r\nAuthorization: " . $config["topggapikey"],
+						'content' => json_encode(['server_count' => $countdetails['guild_count']])
+					]
+				]));
+				print "top.gg update done, next update in 60 minutes\n";
+			}
+			if (isset($config['dblapikey'])) {
+				echo "Running discordbotlist.com API update\n";
+				file_get_contents('https://discordbotlist.com/api/bots/' . $discord->id . '/stats', false, stream_context_create([
+					'http' => [
+						'method' => 'POST',
+						'header'  => "Content-type: application/json\r\nAuthorization: Bot " . $config["dblapikey"],
+						'content' => json_encode(["guilds"=>$countdetails['guild_count'],"users"=>$countdetails['member_count']]),
+					]
+				]));
+				print "discordbotlist.com API update done, next update in 60 minutes\n";
+			}
+			if (isset($config['ondiscordapikey'])) {
+                                echo "Running bots.ondiscord.xyz API update\n";
+                                file_get_contents('https://bots.ondiscord.xyz/bot-api/bots/' . $discord->id . '/guilds', false, stream_context_create([
+                                        'http' => [
+                                                'method' => 'POST',
+                                                'header'  => "Content-type: application/json\r\nAuthorization: " . $config["ondiscordapikey"],
+                                                'content' => json_encode(["guildCount"=>$countdetails['guild_count']]),
+                                        ]
+                                ]));
+                                print "bots.ondiscord.xyz API update done, next update in 60 minutes\n";
+			}
 		}
+
 
 		/* Update online presence */
 		if (time() - $last_update_status > 120) {
@@ -271,6 +298,7 @@ If you want the bot to tell you what is literally defined in the database for a 
 							"title" => $discord->username . " status",
 							"color"=>0xffda00,
 							"url"=>"https://www.botnix.org",
+							"image"=>["url"=>$config['statsurl'] . "?now=" . time(), "width"=>390, "height"=>195],
 							"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
 							"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
 							"fields"=>[

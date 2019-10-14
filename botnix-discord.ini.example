@@ -4,3 +4,6 @@ telnetuser=insert your telnet username here for your bot
 telnetpass=insert your telnet password here for your bot
 telnetport=insert your telnet port here for your bot - localhost only so there's no hostname value
 topggapikey=if registered on top.gg (really you shouldn't be because I am, they don't accept clones/forks!) put your API key here.
+dblapikey=if registered on discordbotlist.com (as above) put your API key here
+ondiscordapikey=api key for bots.ondiscord.xyz
+statsurl=url to stats image, if you have one
