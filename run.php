@@ -169,6 +169,17 @@ $discord->on('ready', function ($discord) {
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
 		$content = trim(preg_replace('/\r|\n/', ' ', $content));
 
+		if ($content == $discord->username . " invite") {
+			$message->channel->sendMessage("", false, [
+				"author" => ["name"=>"Want $discord->username on your server?"],
+				"title" => "Click here for the invite link",
+				"color"=>0xffda00,
+				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
+				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Requested by " . $author->username, "icon_url"=>"https://www.botnix.org/images/botnix.png"],
+				"url"=>"https://discordapp.com/oauth2/authorize?client_id=".$discord->id."&scope=bot&permissions=379968",
+			]);
+			return;
+		}
 		if ($content == $discord->username . " help") {
 			$trigger = "@".$discord->username;
 			echo "Responding to help on channel\n";
