@@ -119,5 +119,5 @@ abstract class Event
      * @param Deferred $deferred The promise to use
      * @param array    $data     The data that was sent with the WebSocket
      */
-    abstract public function handle(Deferred $deferred, $data);
+    abstract public function handle(Deferred $deferred, &$data);
 }

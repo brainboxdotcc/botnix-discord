@@ -84,6 +84,8 @@ function sporks($user, $content, $randomnick = "")
 /* Connect to discord */
 $discord = new \Discord\Discord([
 	'token' => $config['token'],
+	'loadAllMembers'=>false,
+	'retrieveBans'=>false,
 ]);
 
 /* Discord API connection ready to serve! */
@@ -190,17 +192,24 @@ $discord->on('ready', function ($discord) {
 			$params = explode(' ', $content);
 			$chanconfig = getSettings($global_last_message->d->channel_id);
 			$access = false;
-			foreach ($message->channel->guild->roles as $id=>$role) {
-				foreach ($global_last_message->d->member->roles as $memberrole) {
-					if ($id == $memberrole) {
-						if ($role->permissions->manage_messages == true) {
-							$access = true;
-							break;
+
+			/* First check if server owner of current guild */
+			if ($message->channel->guild->owner_id == $author->id) {
+				$access = true;
+			} else {
+				/* Iterate roles looking for manage messages or administrator */
+				foreach ($message->channel->guild->roles as $id=>$role) {
+					foreach ($global_last_message->d->member->roles as $memberrole) {
+						if ($id == $memberrole) {
+							if ($role->permissions->manage_messages == true || $role->permissions->administrator == true) {
+								$access = true;
+								break;
+							}
 						}
 					}
-				}
-				if ($access) {
-					break;
+					if ($access) {
+						break;
+					}
 				}
 			}
 			if (!$access) {

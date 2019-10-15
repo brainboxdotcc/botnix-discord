@@ -21,7 +21,7 @@ class MessageCreate extends Event
     /**
      * {@inheritdoc}
      */
-    public function handle(Deferred $deferred, $data)
+    public function handle(Deferred $deferred, &$data)
     {
         $messagePart = $this->factory->create(Message::class, $data, true);
 

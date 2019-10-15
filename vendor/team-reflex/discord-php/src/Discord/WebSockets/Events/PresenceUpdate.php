@@ -20,7 +20,7 @@ class PresenceUpdate extends Event
     /**
      * {@inheritdoc}
      */
-    public function handle(Deferred $deferred, $data)
+    public function handle(Deferred $deferred, &$data)
     {
         $presenceUpdate = $this->factory->create(PresenceUpdatePart::class, $data, true);
         $old            = null;
