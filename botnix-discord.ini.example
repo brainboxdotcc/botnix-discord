@@ -7,3 +7,7 @@ topggapikey=if registered on top.gg (really you shouldn't be because I am, they 
 dblapikey=if registered on discordbotlist.com (as above) put your API key here
 ondiscordapikey=api key for bots.ondiscord.xyz
 statsurl=url to stats image, if you have one
+dbuser=mysql username
+dbpass=mysql password
+db=mysql database
+dbhost=mysql host

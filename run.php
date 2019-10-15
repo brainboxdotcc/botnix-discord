@@ -17,6 +17,7 @@
 include __DIR__.'/vendor/autoload.php';
 include __DIR__.'/apiupdate.php';
 include __DIR__.'/help.php';
+include __DIR__.'/settings.php';
 
 use Discord\Parts\User\Game;
 use Discord\Parts\User\User;
@@ -35,11 +36,17 @@ $config = parse_ini_file("../botnix-discord.ini");
 
 $randoms = [];
 
+$global_found = 1;
+
+$conn = mysqli_connect($config['dbhost'], $config['dbuser'], $config['dbpass']);
+mysqli_select_db($conn, $config['db']);
+
 /* Connect to the bot via its telnet port over localhost for remote control */
 function sporks($user, $content, $randomnick = "")
 {
 	global $config;
 	global $ircnick;
+	global $global_found;
 	/* NO, you can't configure any host other than localhost, as this connection is plaintext! */
 	$fp = fsockopen('localhost', $config['telnetport'], $errno, $errstr, 1);
 	if (!$fp) {
@@ -68,6 +75,8 @@ function sporks($user, $content, $randomnick = "")
 			}
 		}
 		fclose($fp);
+		list($found, $response) = explode(' ', $response, 2);
+		$global_found = $found;
 		return str_replace("_", " ", $response);
 	}
 }
@@ -91,6 +100,7 @@ $discord->on('ready', function ($discord) {
 		global $ircnick;
 		global $config;
 		global $randoms;
+		global $global_found;
 
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
@@ -110,7 +120,7 @@ $discord->on('ready', function ($discord) {
 			$ddapi = new WebsiteUpdatePostThread('https://divinediscordbots.com/bot/'.$discord->id . '/stats', ['server_count'=>$countdetails['guild_count']], $config["ddbotsapikey"]);
 
 			$topggapi->run();
-			$dblapi->runt();
+			$dblapi->run();
 			$ondiscordapi->run();
 			$ddapi->run();
 		}
@@ -133,12 +143,26 @@ $discord->on('ready', function ($discord) {
 		}
 
 		$randomnick = "";
-		if (!isset($randoms[$message->channel->guild->id])) {
-			$randoms[$message->channel->guild->id] = [];
+		if ($author->username != $discord->username && $author->id != $discord->id) {
+			if (!isset($randoms[$message->channel->guild->id])) {
+				$randoms[$message->channel->guild->id] = [];
+			}
+			$randoms[$message->channel->guild->id][$author->id] = $author->username;
+			$random = rand(0, sizeof($randoms[$message->channel->guild->id]) - 1);
+			$randomnick = array_slice($randoms[$message->channel->guild->id], $random, 1)[0];
+
+
+			$ignorelist = getSetting($global_last_message->d->channel_id, "ignores");
+			if (is_array($ignorelist)) {
+				foreach ($ignorelist as $userid) {
+					if ($userid == $author->id) {
+						/* User is ignored! */
+						print "Message droppped - user $userid is ignored\n";
+						return;
+					}
+				}
+			}
 		}
-		$randoms[$message->channel->guild->id][$author->id] = $author->username;
-		$random = rand(0, sizeof($randoms[$message->channel->guild->id]) - 1);
-		$randomnick = array_slice($randoms[$message->channel->guild->id], $random, 1)[0];
 
 		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
@@ -149,17 +173,118 @@ $discord->on('ready', function ($discord) {
 			return;
 		}
 		if ($content == $discord->username . " help") {
-			$trigger = "@".$discord->username;
 			echo "Responding to help on channel\n";
 			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
 			$message->author->sendMessage("", false, GetHelp("basic", $discord->username, $discord->id));
 			return;
 		}
-		if ($content == $discord->username . " help advanced") {
-			$trigger = "@".$discord->username;
-			echo "Responding to help (advanced) on channel\n";
+		if (preg_match("/^". $discord->username . " help ([a-z]+)/i", $content, $match)) {
+			$kw = $match[1];
+			echo "Responding to help ($kw) on channel\n";
 			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
-			$message->author->sendMessage("", false, GetHelp("advanced", $discord->username, $discord->id));
+			$message->author->sendMessage("", false, GetHelp($kw, $discord->username, $discord->id));
+			return;
+		}
+
+		if (preg_match("/".$discord->username." config /", $content)) {
+			$params = explode(' ', $content);
+			$chanconfig = getSettings($global_last_message->d->channel_id);
+			$access = false;
+			foreach ($message->channel->guild->roles as $id=>$role) {
+				foreach ($global_last_message->d->member->roles as $memberrole) {
+					if ($id == $memberrole) {
+						if ($role->permissions->manage_messages == true) {
+							$access = true;
+							break;
+						}
+					}
+				}
+				if ($access) {
+					break;
+				}
+			}
+			if (!$access) {
+				$message->channel->sendMessage("Sorry, <@" . $author->id . ">, you require the \"manage messages\" permission to alter configuration for <#".$global_last_message->d->channel_id.">");
+				return;
+			}
+			switch ($params[2]) {
+				case 'show':
+					$learn = false;
+					if (!isset($chanconfig['learningdisabled'])) {
+						$learn = true;
+					}
+					if ($chanconfig['learningdisabled'] == false) {
+						$learn = true;
+					}
+
+					$message->channel->sendMessage("", false, [
+						"title" => "Settings for this channel",
+						"color"=>0xffda00,
+						"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
+						"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
+						"fields"=>[
+							["name"=>"Talk without being mentioned?", "value"=>(isset($chanconfig['talkative']) && $chanconfig['talkative'] == true ? 'Yes' : 'No'), "inline"=>false],
+							["name"=>"Learn from this channel", "value"=>($learn ? 'Yes' : 'No'), "inline"=>false],
+							["name"=>"Ignored Users", "value"=>(isset($chanconfig['ignores']) && is_array($chanconfig['ignores']) ? number_format(sizeof($chanconfig['ignores'])) : '0'), "inline"=>false],
+						],
+						"description" => "For help on changing these settings, type ```@".$discord->username." help config```",
+					]);			
+				break;
+				case 'set':
+					$flag = ($params[4] == 'yes' || $params[4] == 'on');
+					switch ($params[3]) {
+						case 'talkative':
+							setSettings($global_last_message->d->channel_id, "talkative", $flag);
+							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"Talkative mode " .($flag ? 'enabled' : 'disabled')." on <#" . $global_last_message->d->channel_id .">"]);
+						break;
+						case 'learn':
+							setSettings($global_last_message->d->channel_id, "learningdisabled", !$flag);
+							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"Learning mode " .($flag ? 'enabled' : 'disabled')." on <#" . $global_last_message->d->channel_id .">"]);
+						break;
+
+					}
+				break;
+				case 'ignore':
+					$add_or_del = $params[3];
+					$userid = (strtolower($add_or_del) == 'add' || strtolower($add_or_del) == 'del') ? $params[4] : '';
+					if (preg_match('/<@(\d+)>/', $userid, $usermatch) || strtolower($add_or_del) == 'list') {
+						$userid = sizeof($usermatch) > 1 ? $usermatch[1] : '';
+						$user_array = [];
+						if (isset($chanconfig['ignores']) && is_array($chanconfig['ignores'])) {
+							$user_array = $chanconfig['ignores'];
+						}
+						if (strtolower($add_or_del) == 'add') {
+							if ($userid == $discord->id) {
+								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"Confucious say, only an idiot would ignore their inner voice..."]);
+								return;
+							}
+							if ($userid != $author->id) {
+								in_array($userid, $user_array) || $user_array[] = $userid;
+								setSettings($global_last_message->d->channel_id, "ignores", $user_array);
+								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> added to ignore list on <#" . $global_last_message->d->channel_id .">"]);
+							} else {
+								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"You can't add an ignore on yourself on <#" . $global_last_message->d->channel_id .">!"]);
+							}
+						} else if (strtolower($add_or_del) == 'del') {
+							if (($key = array_search($userid, $user_array)) !== false) {
+								unset($user_array[$key]);
+								setSettings($global_last_message->d->channel_id, "ignores", $user_array);
+								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> removed from ignore list on <#" . $global_last_message->d->channel_id .">"]);
+							} else {
+								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> does not exist on ignore list on <#" . $global_last_message->d->channel_id .">!"]);
+							}
+						} else if (strtolower($add_or_del) == 'list') {
+							$descr = "**Ignore list for <#" . $global_last_message->d->channel_id .">**\r\n\r\n";
+							foreach ($user_array as $user_id) {
+								$descr .= "<@" . $user_id . "> ($user_id)\r\n";
+							}
+							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>$descr]);
+						}
+					} else {
+						$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User to add or delete on <#" . $global_last_message->d->channel_id ."> must be referred to as a metion"]);
+					}
+				break;
+			}
 			return;
 		}
 
@@ -181,11 +306,33 @@ $discord->on('ready', function ($discord) {
 				}
 			}
 
-			$reply = sporks($author->username, $content, $randomnick);
-			$reply = trim(preg_replace('/\r|\n/', '', $reply));
+			$talkative = getSetting($global_last_message->d->channel_id, "talkative");
+			$learningdisabled = getSetting($global_last_message->d->channel_id, "learningdisabled");
+
+			if ($talkative) {
+				$mentioned = true;
+				$content = $discord->username . ' ' . $content;
+				if ($content == $discord->username . ' ' . $discord->username . ' status') {
+					$content = $discord->username . ' status';
+				}
+			}
+
+			/* When learning is not disabled, bot is always learning */
+			if (!$learningdisabled) {
+				$reply = sporks($author->username, $content, $randomnick);
+				$reply = trim(preg_replace('/\r|\n/', '', $reply));
+			}
 
 			/* Only respond if directly addressed */
 			if ((!isset($author->bot) || $author->bot == false) && $mentioned && $author->username != $discord->username) {
+
+				/* When learning is disabled, bot must be directly addressed to learn a new fact */
+				if ($learningdisabled) {
+					$reply = sporks($author->username, $content, $randomnick);
+					$reply = trim(preg_replace('/\r|\n/', '', $reply));
+				}
+
+
 				$reply = preg_replace('/^\001ACTION (.*)\s*\001$/', '*\1*', $reply);
 				$reply = preg_replace('/\s\*$/', '*', $reply);
 				if ($reply != '*NOTHING*') {
@@ -219,9 +366,12 @@ $discord->on('ready', function ($discord) {
 								$reply = str_replace($matches[0][$i], "<".$matches[0][$i].">", $reply);
 							}
 						}
+						if ($talkative && !$global_found) {
+							return;
+						}
 						$message->channel->sendMessage($reply);
 					}
-				} else {
+				} else if (!$talkative) {
 					$r = rand(0, 5);
 					/* These are here just in case the bot's telnet port is down, so that at least it can say something. */
 					switch ($r) {
