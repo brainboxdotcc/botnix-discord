@@ -544,10 +544,11 @@ class Discord
 			$data = $message->getPayload();
 		}
 
-		$data = json_decode($data);
-
-		if ($data->t == 'PRESENCE_UPDATE' || $data->t == 'TYPING_START') {
+		/* Drop these before we even parse json, it's much more cpu efficient. We dont care for TYPING_START or PRESENCE_UPDATE */
+		if (substr($data, 0, 23) == '{"t":"PRESENCE_UPDATE",' || (substr($data, 0, 20) == '{"t":"TYPING_START",')) {
 			return;
+		} else {
+			$data = json_decode($data);
 		}
 
 		$this->emit('raw', [$data, $this]);
@@ -808,7 +809,7 @@ class Discord
 						'$referring_domain' => 'https://github.com/teamreflex/DiscordPHP',
 					],
 			'compress' => true,
-			//'guild_subscriptions' => false,
+			'guild_subscriptions' => $this->options['guildSubscriptions'],
 			'presence' => [
 			'game' => [
 				'name' => 'for first message',
@@ -1202,19 +1203,21 @@ class Discord
 				'pmChannels',
 				'storeMessages',
 				'retrieveBans',
+				'guildSubscriptions',
 			])
 			->setDefaults([
-				'loop'		   => LoopFactory::create(),
-				'bot'			=> true,
-				'logger'		 => null,
-				'loggerLevel'	=> Monolog::INFO,
-				'logging'		=> true,
-				'cachePool'	  => new ArrayCachePool(),
-				'loadAllMembers' => false,
-				'disabledEvents' => [],
-				'pmChannels'	 => false,
-				'storeMessages'  => false,
-				'retrieveBans'   => true,
+				'loop'               => LoopFactory::create(),
+				'bot'                => true,
+				'logger'             => null,
+				'loggerLevel'        => Monolog::INFO,
+				'logging'            => true,
+				'cachePool'          => new ArrayCachePool(),
+				'loadAllMembers'     => false,
+				'disabledEvents'     => [],
+				'pmChannels'         => false,
+				'storeMessages'      => false,
+				'retrieveBans'       => true,
+				'guildSubscriptions' =>true,
 			])
 			->setAllowedTypes('bot', 'bool')
 			->setAllowedTypes('loop', LoopInterface::class)
@@ -1224,7 +1227,8 @@ class Discord
 			->setAllowedTypes('disabledEvents', 'array')
 			->setAllowedTypes('pmChannels', 'bool')
 			->setAllowedTypes('storeMessages', 'bool')
-			->setAllowedTypes('retrieveBans', 'bool');
+			->setAllowedTypes('retrieveBans', 'bool')
+			->setAllowedTypes('guildSubscriptions', 'bool');
 
 		$options = $resolver->resolve($options);
 

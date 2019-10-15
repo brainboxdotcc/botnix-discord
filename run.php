@@ -84,6 +84,7 @@ function sporks($user, $content, $randomnick = "")
 /* Connect to discord */
 $discord = new \Discord\Discord([
 	'token' => $config['token'],
+	'guildSubscriptions'=>false,
 	'loadAllMembers'=>false,
 	'retrieveBans'=>false,
 ]);
