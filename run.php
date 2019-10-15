@@ -15,6 +15,7 @@
  */
 
 include __DIR__.'/vendor/autoload.php';
+include __DIR__.'/apiupdate.php';
 
 use Discord\Parts\User\Game;
 use Discord\Parts\User\User;
@@ -23,13 +24,15 @@ use Discord\Parts\User\User;
 $last_update_status = time() - 600;
 
 /* First update an hour from now, prevents spamming the API if the bot is in a short crashloop */
-$last_topgg_update = time() + 3600;
+$last_botsite_webapi_update = time() + 3600;
 
 /* Current IRC nickname reported from botnix core, used to address bot via telnet session */
 $ircnick = "";
 
 /* Live config should be in the directory above this one. It's like this to make sure you never accidentally commit it to a repository. */
 $config = parse_ini_file("../botnix-discord.ini");
+
+$randoms = [];
 
 /* Connect to the bot via its telnet port over localhost for remote control */
 function sporks($user, $content, $randomnick = "")
@@ -83,9 +86,10 @@ $discord->on('ready', function ($discord) {
 		global $discord;
 		global $global_last_message;
 		global $last_update_status;
-		global $last_topgg_update;
+		global $last_botsite_webapi_update;
 		global $ircnick;
 		global $config;
+		global $randoms;
 
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
@@ -95,43 +99,19 @@ $discord->on('ready', function ($discord) {
 		}
 
 		/* Update for top.gg API, if defined in config */
-		if (time() - $last_topgg_update > 3600) {
-			$last_topgg_update = time();
+		if (time() - $last_botsite_webapi_update > 3600) {
+			$last_botsite_webapi_update = time();
 			$countdetails = count_guilds($discord);
 
-			if (isset($config['topggapikey'])) {
-				echo "Running top.gg API update\n";
-				file_get_contents('https://top.gg/api/bots/' . $discord->id . '/stats', false, stream_context_create([
-					'http' => [
-						'method' => 'POST',
-						'header'  => "Content-type: application/json\r\nAuthorization: " . $config["topggapikey"],
-						'content' => json_encode(['server_count' => $countdetails['guild_count']])
-					]
-				]));
-				print "top.gg update done, next update in 60 minutes\n";
-			}
-			if (isset($config['dblapikey'])) {
-				echo "Running discordbotlist.com API update\n";
-				file_get_contents('https://discordbotlist.com/api/bots/' . $discord->id . '/stats', false, stream_context_create([
-					'http' => [
-						'method' => 'POST',
-						'header'  => "Content-type: application/json\r\nAuthorization: Bot " . $config["dblapikey"],
-						'content' => json_encode(["guilds"=>$countdetails['guild_count'],"users"=>$countdetails['member_count']]),
-					]
-				]));
-				print "discordbotlist.com API update done, next update in 60 minutes\n";
-			}
-			if (isset($config['ondiscordapikey'])) {
-                                echo "Running bots.ondiscord.xyz API update\n";
-                                file_get_contents('https://bots.ondiscord.xyz/bot-api/bots/' . $discord->id . '/guilds', false, stream_context_create([
-                                        'http' => [
-                                                'method' => 'POST',
-                                                'header'  => "Content-type: application/json\r\nAuthorization: " . $config["ondiscordapikey"],
-                                                'content' => json_encode(["guildCount"=>$countdetails['guild_count']]),
-                                        ]
-                                ]));
-                                print "bots.ondiscord.xyz API update done, next update in 60 minutes\n";
-			}
+			$topggapi = new WebsiteUpdatePostThread('https://top.gg/api/bots/' . $discord->id . '/stats', ['server_count' => $countdetails['guild_count']], $config["topggapikey"]);
+			$dblapi = new WebsiteUpdatePostThread('https://discordbotlist.com/api/bots/' . $discord->id . '/stats', ["guilds"=>$countdetails['guild_count'],"users"=>$countdetails['member_count']], "Bot " . $config["dblapikey"]);
+			$ondiscordapi = new WebsiteUpdatePostThread('https://bots.ondiscord.xyz/bot-api/bots/' . $discord->id . '/guilds', ["guildCount"=>$countdetails['guild_count']], $config["ondiscordapikey"]);
+			$ddapi = new WebsiteUpdatePostThread('https://divinediscordbots.com/bot/'.$discord->id . '/stats', ['server_count'=>$countdetails['guild_count']], $config["ddbotsapikey"]);
+
+			$topggapi->run();
+			$dblapi->runt();
+			$ondiscordapi->run();
+			$ddapi->run();
 		}
 
 
@@ -151,19 +131,13 @@ $discord->on('ready', function ($discord) {
 			print "Presence update done\n";
 		}
 
-		$users = [];
 		$randomnick = "";
-		/*
-		XXX FIXME XXX Doesnt work with guild_subscriptions off
- 		foreach ($message->channel->guild->members as $member) {
-			$users[] = $member;
+		if (!isset($randoms[$message->channel->guild->id])) {
+			$randoms[$message->channel->guild->id] = [];
 		}
-		$usercount = count($users);
-		if ($usercount) {
-			$random = rand(0, $usercount - 1);
-			$randomuser = array_slice($users, $random, 1);
-			$randomnick = $randomuser[0]->user->username;
-		}*/
+		$randoms[$message->channel->guild->id][$author->id] = $author->username;
+		$random = rand(0, sizeof($randoms[$message->channel->guild->id]) - 1);
+		$randomnick = array_slice($randoms[$message->channel->guild->id], $random, 1)[0];
 
 		# Replace mention of bot with nickname, and strip newlines
 		$content = preg_replace('/<@'.$discord->id.'>/', $discord->username, $message->content);
