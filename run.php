@@ -16,6 +16,7 @@
 
 include __DIR__.'/vendor/autoload.php';
 include __DIR__.'/apiupdate.php';
+include __DIR__.'/help.php';
 
 use Discord\Parts\User\Game;
 use Discord\Parts\User\User;
@@ -144,108 +145,21 @@ $discord->on('ready', function ($discord) {
 		$content = trim(preg_replace('/\r|\n/', ' ', $content));
 
 		if ($content == $discord->username . " invite") {
-			$message->channel->sendMessage("", false, [
-				"author" => ["name"=>"Want $discord->username on your server?"],
-				"title" => "Click here for the invite link",
-				"color"=>0xffda00,
-				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Requested by " . $author->username, "icon_url"=>"https://www.botnix.org/images/botnix.png"],
-				"url"=>"https://discordapp.com/oauth2/authorize?client_id=".$discord->id."&scope=bot&permissions=379968",
-			]);
+			$message->channel->sendMessage("", false, GetHelp("invite", $discord->username, $author->username));
 			return;
 		}
 		if ($content == $discord->username . " help") {
 			$trigger = "@".$discord->username;
 			echo "Responding to help on channel\n";
 			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
-			//$message->channel->sendMessage("", false, [
-			$message->author->sendMessage("", false, [
-				"title" => $discord->username . " help",
-				"color"=>0xffda00,
-				"url"=>"https://www.botnix.org",
-				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
-				"fields"=>[
-					[
-						"name"=>"Teaching " . $discord->username,
-						"value"=>"
-							Any declaritive statement will teach the bot. For example someone saying ```twitch is down again``` will teach the bot this response, asking later ```$trigger twitch``` will make the bot respond
-							```I heard twitch is down again```
-						",
-						"inline"=>false,
-					],
-					[
-						"name"=>"Giving ".$discord->username." amnesia",
-						"value"=>"
-							You can make the bot forget a phrase with
-							```$trigger forget <keyword>```
-							If the bot already knows a fact, you will usually have to tell it to forget the fact, before it will accept a new one.
-						",
-						"inline"=>false,
-					],
-					[
-							"name"=>"Other commands",
-							"value"=>"You can ask the bot where he learned a phrase by asking:
-```$trigger, who told you about <keyword>?```
-A status report can be obtained by asking the bot:
-```$trigger status```
-Note that the bot will only talk on channels, and not in private message, and will only respond when mentioned, although it will silently learn all it observes.",
-							"inline"=>false,
-					],
-					[
-						"name"=>"Advanced commands",
-						"value"=>"Further advanced commands are available, for info on them type ```$trigger help advanced```",
-						"inline"=>false,
-					],
-				],
-				"description" => "",
-			]);
+			$message->author->sendMessage("", false, GetHelp("basic", $discord->username, $discord->id));
 			return;
 		}
 		if ($content == $discord->username . " help advanced") {
 			$trigger = "@".$discord->username;
 			echo "Responding to help (advanced) on channel\n";
 			$message->channel->sendMessage("<@$author->id> Please check your DMs for help text.");
-			//$message->channel->sendMessage("", false, [
-			$message->author->sendMessage("", false, [
-				"title" => $discord->username . " advanced help",
-				"color"=>0xffda00,
-				"url"=>"https://www.botnix.org",
-				"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
-				"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
-			"fields"=>[
-					[
-							"name"=>"Literal responses",
-							"value"=>"
-More advanced commands are available, such as if you want the bot to literally say some text, rather than reformatting it, you can for example type:
-```$trigger, twitch is <reply> twitch is a streaming service.```
-If you want the bot to tell you what is literally defined in the database for a fact you can type
-```$trigger literal <keyword>```",
-							"inline"=>false,
-					],			
-					[
-						"name"=>"Variables",
-						"value"=>"You can use special keywords, which will be replaced:
-```<who>``` the nickname (not as a mention) of the user talking to the bot.
-```<me>``` the bot's current nickname.
-```<random>``` the nickname (not as a mention) of a *random* user on the current discord server.
-```<date>``` the date the bot learned the fact it is responding with
-```<now>``` the current date and time.
-```<list:(comma separated list)>``` Select one response from a comma separated list, e.g. ``<list:apple,orange,pear>`` will return one of apple, orange or pear. Other variables may be values in the list.
-```<sequence>``` Returns the number of messages spoken by the user
-",
-						"inline"=>false,
-					],
-					[
-						"name"=>"Randomised Responses",
-						"value"=>"You can separate multiple responses with a pipe symbol ``|`` and the bot will pick one at random when responding. for example:
-```$trigger roll a dice is <reply>one|<reply>two|<reply>three|<reply>four|<reply>five|<reply>six```",
-						"inline"=>false,
-					],
-
-				],
-				"description" => "",
-			]);
+			$message->author->sendMessage("", false, GetHelp("advanced", $discord->username, $discord->id));
 			return;
 		}
 
