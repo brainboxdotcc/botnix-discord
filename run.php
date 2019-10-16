@@ -15,71 +15,14 @@
  */
 
 include __DIR__.'/vendor/autoload.php';
+include __DIR__.'/globals.php';
 include __DIR__.'/apiupdate.php';
 include __DIR__.'/help.php';
 include __DIR__.'/settings.php';
+include __DIR__.'/infobot.php';
 
 use Discord\Parts\User\Game;
 use Discord\Parts\User\User;
-
-/* Updates immediately, doesnt matter if it spams botnix, it can take it ;-) */
-$last_update_status = time() - 600;
-
-/* First update an hour from now, prevents spamming the API if the bot is in a short crashloop */
-$last_botsite_webapi_update = time() + 3600;
-
-/* Current IRC nickname reported from botnix core, used to address bot via telnet session */
-$ircnick = "";
-
-/* Live config should be in the directory above this one. It's like this to make sure you never accidentally commit it to a repository. */
-$config = parse_ini_file("../botnix-discord.ini");
-
-$randoms = [];
-
-$global_found = 1;
-
-$conn = mysqli_connect($config['dbhost'], $config['dbuser'], $config['dbpass']);
-mysqli_select_db($conn, $config['db']);
-
-/* Connect to the bot via its telnet port over localhost for remote control */
-function sporks($user, $content, $randomnick = "")
-{
-	global $config;
-	global $ircnick;
-	global $global_found;
-	/* NO, you can't configure any host other than localhost, as this connection is plaintext! */
-	$fp = fsockopen('localhost', $config['telnetport'], $errno, $errstr, 1);
-	if (!$fp) {
-		print $errno . ": " . $errstr . "\n";
-		return "*NOTHING*";
-	} else {
-		/* Note: This uses the .DR command specific to the infobot.pm module. We only want infobot available on discord,
-		 * all the IRC admin/moderation stuff is useless on discord and may introduce problems.
-		 */
-		$userprompt = fgets($fp);
-		fwrite($fp, $config['telnetuser']."\n");
-		$passprompt = fgets($fp);
-		fwrite($fp, $config['telnetpass']."\n");
-		$welcomeprompt = fgets($fp);
-		if ($randomnick != "") {
-			fwrite($fp, ".RN $randomnick\n");
-			$response = fgets($fp);
-		}
-		$user = preg_replace("/\s+/", "_", $user);
-		fwrite($fp, ".DR $user $content\n");
-		$response = fgets($fp);
-		$netdata = fgets($fp);
-		if (preg_match("/nick => '(.+?)'/", $netdata, $match)) {
-			if ($match[1] != "") {
-				$ircnick = $match[1];
-			}
-		}
-		fclose($fp);
-		list($found, $response) = explode(' ', $response, 2);
-		$global_found = $found;
-		return str_replace("_", " ", $response);
-	}
-}
 
 /* Connect to discord */
 $discord = new \Discord\Discord([
@@ -90,7 +33,7 @@ $discord = new \Discord\Discord([
 ]);
 
 /* Discord API connection ready to serve! */
-$discord->on('ready', function ($discord) {
+$discord->on('ready', function ($discord) use ($global_last_message) {
 	echo "Bot '$discord->username#$discord->discriminator' ($discord->id) is ready.", PHP_EOL;
 	$countdetails = count_guilds($discord);
 	echo "Present on " . $countdetails['guild_count'] . " servers with a total of " . $countdetails['member_count'] . " members\n";
@@ -103,7 +46,6 @@ $discord->on('ready', function ($discord) {
 		global $ircnick;
 		global $config;
 		global $randoms;
-		global $global_found;
 
 		// Grab from global, because discordphp strips it out!
 		$author = $global_last_message->d->author;
@@ -133,7 +75,7 @@ $discord->on('ready', function ($discord) {
 		if (time() - $last_update_status > 120) {
 			$last_update_status = time();
 			echo "Running presence update\n";
-			$info = sporks("Self", $ircnick . " status");
+			list($found,$info) = infobot("Self", $ircnick . " status");
 			$countdetails = count_guilds($discord);
 			preg_match('/^Since (.+?), there have been (\d+) modifications and (\d+) questions. I have been alive for (.+?), I currently know (\d+)/', $info, $matches);
 			$game = $discord->factory(Game::class, [
@@ -214,7 +156,7 @@ $discord->on('ready', function ($discord) {
 				}
 			}
 			if (!$access) {
-				$message->channel->sendMessage("Sorry, <@" . $author->id . ">, you require the \"manage messages\" permission to alter configuration for <#".$global_last_message->d->channel_id.">");
+				$message->channel->sendMessage("Sorry, <@" . $author->id . ">, you must be in a role with the \"manage messages\" permission to alter configuration for <#".$global_last_message->d->channel_id."> (or be server owner or an administrator)");
 				return;
 			}
 			switch ($params[2]) {
@@ -255,15 +197,15 @@ $discord->on('ready', function ($discord) {
 					}
 				break;
 				case 'ignore':
-					$add_or_del = $params[3];
-					$userid = (strtolower($add_or_del) == 'add' || strtolower($add_or_del) == 'del') ? $params[4] : '';
+					$add_or_del = strtolower($params[3]);
+					$userid = ($add_or_del == 'add' || $add_or_del == 'del') ? $params[4] : '';
 					if (preg_match('/<@(\d+)>/', $userid, $usermatch) || strtolower($add_or_del) == 'list') {
 						$userid = sizeof($usermatch) > 1 ? $usermatch[1] : '';
 						$user_array = [];
 						if (isset($chanconfig['ignores']) && is_array($chanconfig['ignores'])) {
 							$user_array = $chanconfig['ignores'];
 						}
-						if (strtolower($add_or_del) == 'add') {
+						if ($add_or_del == 'add') {
 							if ($userid == $discord->id) {
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"Confucious say, only an idiot would ignore their inner voice..."]);
 								return;
@@ -275,7 +217,7 @@ $discord->on('ready', function ($discord) {
 							} else {
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"You can't add an ignore on yourself on <#" . $global_last_message->d->channel_id .">!"]);
 							}
-						} else if (strtolower($add_or_del) == 'del') {
+						} else if ($add_or_del == 'del') {
 							if (($key = array_search($userid, $user_array)) !== false) {
 								unset($user_array[$key]);
 								setSettings($global_last_message->d->channel_id, "ignores", $user_array);
@@ -283,16 +225,27 @@ $discord->on('ready', function ($discord) {
 							} else {
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> does not exist on ignore list on <#" . $global_last_message->d->channel_id .">!"]);
 							}
-						} else if (strtolower($add_or_del) == 'list') {
-							$descr = "**Ignore list for <#" . $global_last_message->d->channel_id .">**\r\n\r\n";
-							foreach ($user_array as $user_id) {
-								$descr .= "<@" . $user_id . "> ($user_id)\r\n";
+						} else if ($add_or_del == 'list') {
+							if (count($user_array)) {
+								$descr = "**Ignore list for <#" . $global_last_message->d->channel_id .">**\r\n\r\n";
+								foreach ($user_array as $user_id) {
+									$descr .= "<@" . $user_id . "> ($user_id)\r\n";
+								}
+							} else {
+								 $descr = "**Ignore list for <#" . $global_last_message->d->channel_id .">** is **empty**!";
 							}
 							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>$descr]);
 						}
 					} else {
-						$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User to add or delete on <#" . $global_last_message->d->channel_id ."> must be referred to as a metion"]);
+						if ($add_or_del != 'add' && $add_or_del != 'del' && $add_or_del != 'list') {
+							$message->channel->sendMessage("", false, ["color"=>0xff0000, "description"=>"Invalid config ignore command '**$params[3]**', should be '**add**', '**del**' or '**list**'"]);
+						} else {
+							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User to add or delete on <#" . $global_last_message->d->channel_id ."> must be referred to as a metion"]);
+						}
 					}
+				break;
+				default:
+					$message->channel->sendMessage("", false, ["color"=>0xff0000, "description"=>"Invalid config command '**$params[2]**', should be '**set**', '**show**' or '**ignore**'"]);
 				break;
 			}
 			return;
@@ -327,9 +280,11 @@ $discord->on('ready', function ($discord) {
 				}
 			}
 
+			$found = 0;
+
 			/* When learning is not disabled, bot is always learning */
 			if (!$learningdisabled) {
-				$reply = sporks($author->username, $content, $randomnick);
+				list($found,$reply) = infobot($author->username, $content, $randomnick);
 				$reply = trim(preg_replace('/\r|\n/', '', $reply));
 			}
 
@@ -338,7 +293,7 @@ $discord->on('ready', function ($discord) {
 
 				/* When learning is disabled, bot must be directly addressed to learn a new fact */
 				if ($learningdisabled) {
-					$reply = sporks($author->username, $content, $randomnick);
+					list($found,$reply) = infobot($author->username, $content, $randomnick);
 					$reply = trim(preg_replace('/\r|\n/', '', $reply));
 				}
 
@@ -376,7 +331,7 @@ $discord->on('ready', function ($discord) {
 								$reply = str_replace($matches[0][$i], "<".$matches[0][$i].">", $reply);
 							}
 						}
-						if ($talkative && !$global_found) {
+						if ($talkative && !$found) {
 							return;
 						}
 						$message->channel->sendMessage($reply);

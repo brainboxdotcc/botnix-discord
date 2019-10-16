@@ -8,7 +8,7 @@ function GetHelp($section, $botusername, $botid, $author = "") {
 		$content = str_replace(":author:", $author, $content);
 		return json_decode($content);
 	} else {
-		return ["color"=>0xff0000, "description"=>"Missing help file '$section.json'!"];
+		return ["color"=>0xff0000, "description"=>"No such help section '$section'!"];
 	}
 }
 
