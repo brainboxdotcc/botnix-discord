@@ -97,7 +97,7 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 			$randomnick = array_slice($randoms[$message->channel->guild->id], $random, 1)[0];
 
 
-			$ignorelist = getSetting($global_last_message->d->channel_id, "ignores");
+			$ignorelist = getSetting($global_last_message->d->channel_id, $message->channel->guild->id, "ignores");
 			if (is_array($ignorelist)) {
 				foreach ($ignorelist as $userid) {
 					if ($userid == $author->id) {
@@ -114,7 +114,7 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 		$content = trim(preg_replace('/\r|\n/', ' ', $content));
 
 		if ($content == $discord->username . " invite") {
-			$message->channel->sendMessage("", false, GetHelp("invite", $discord->username, $author->username));
+			$message->channel->sendMessage("", false, GetHelp("invite", $discord->username, $discord->id, $author->username));
 			return;
 		}
 		if ($content == $discord->username . " help") {
@@ -133,7 +133,7 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 
 		if (preg_match("/".$discord->username." config /", $content)) {
 			$params = explode(' ', $content);
-			$chanconfig = getSettings($global_last_message->d->channel_id);
+			$chanconfig = getSettings($global_last_message->d->channel_id, $message->channel->guild->id);
 			$access = false;
 
 			/* First check if server owner of current guild */
@@ -186,11 +186,11 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 					$flag = ($params[4] == 'yes' || $params[4] == 'on');
 					switch ($params[3]) {
 						case 'talkative':
-							setSettings($global_last_message->d->channel_id, "talkative", $flag);
+							setSettings($global_last_message->d->channel_id, $message->channel->guild->id, "talkative", $flag);
 							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"Talkative mode " .($flag ? 'enabled' : 'disabled')." on <#" . $global_last_message->d->channel_id .">"]);
 						break;
 						case 'learn':
-							setSettings($global_last_message->d->channel_id, "learningdisabled", !$flag);
+							setSettings($global_last_message->d->channel_id, $message->channel->guild->id, "learningdisabled", !$flag);
 							$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"Learning mode " .($flag ? 'enabled' : 'disabled')." on <#" . $global_last_message->d->channel_id .">"]);
 						break;
 
@@ -212,7 +212,7 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 							}
 							if ($userid != $author->id) {
 								in_array($userid, $user_array) || $user_array[] = $userid;
-								setSettings($global_last_message->d->channel_id, "ignores", $user_array);
+								setSettings($global_last_message->d->channel_id, $message->channel->guild->id, "ignores", $user_array);
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> added to ignore list on <#" . $global_last_message->d->channel_id .">"]);
 							} else {
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"You can't add an ignore on yourself on <#" . $global_last_message->d->channel_id .">!"]);
@@ -220,7 +220,7 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 						} else if ($add_or_del == 'del') {
 							if (($key = array_search($userid, $user_array)) !== false) {
 								unset($user_array[$key]);
-								setSettings($global_last_message->d->channel_id, "ignores", $user_array);
+								setSettings($global_last_message->d->channel_id, $message->channel->guild->id, "ignores", $user_array);
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> removed from ignore list on <#" . $global_last_message->d->channel_id .">"]);
 							} else {
 								$message->channel->sendMessage("", false, ["color"=>0xffda00,"description"=>"User <@".$userid."> does not exist on ignore list on <#" . $global_last_message->d->channel_id .">!"]);
@@ -269,8 +269,8 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 				}
 			}
 
-			$talkative = getSetting($global_last_message->d->channel_id, "talkative");
-			$learningdisabled = getSetting($global_last_message->d->channel_id, "learningdisabled");
+			$talkative = getSetting($global_last_message->d->channel_id, $message->channel->guild->id, "talkative");
+			$learningdisabled = getSetting($global_last_message->d->channel_id, $message->channel->guild->id, "learningdisabled");
 
 			if ($talkative) {
 				$mentioned = true;
@@ -309,7 +309,7 @@ $discord->on('ready', function ($discord) use ($global_last_message) {
 							"title" => $discord->username . " status",
 							"color"=>0xffda00,
 							"url"=>"https://www.botnix.org",
-							"image"=>["url"=>$config['statsurl'] . "?now=" . time(), "width"=>390, "height"=>195],
+							"image"=>["url"=>$config['statsurl'] . "?now=" . time()],
 							"thumbnail"=>["url"=>"https://www.botnix.org/images/botnix.png"],
 							"footer"=>["link"=>"https;//www.botnix.org/", "text"=>"Powered by Botnix 2.0 with the infobot and discord modules", "icon_url"=>"https://www.botnix.org/images/botnix.png"],
 							"fields"=>[
